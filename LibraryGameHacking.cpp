@@ -70,9 +70,9 @@ void MemoryMgr::memEdit(DWORD addr, const char arrBytes[], UINT size) {
 
 
 LPVOID MemoryMgr::allocWriteEx(HANDLE hProcess, LPVOID pType, DWORD size) {
-	LPVOID alloc = VirtualAllocEx(hProcess, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	WriteProcessMemory(hProcess, alloc, pType, size, 0);
-	return alloc;
+	LPVOID Alloc = VirtualAllocEx(hProcess, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	if(Alloc) WriteProcessMemory(hProcess, Alloc, pType, size, 0);
+	return Alloc;
 }
 
 
