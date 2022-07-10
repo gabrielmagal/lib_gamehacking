@@ -1,3 +1,13 @@
+#include <Windows.h>
+#include <string>
+#include <iostream>
+#include <time.h>
+#include <psapi.h>
+#include <tlhelp32.h>
+#include <vector>
+#include <locale>
+using namespace std;
+
 typedef struct _UNICODE_STRING {
 	USHORT length;
 	USHORT maximumLength;
@@ -13,10 +23,25 @@ typedef struct mystr {
 } *Pmystr;
 
 
+class Tools {
+public:
+	static MODULEINFO GetModuleInfo(const char* szModule);
+	static bool checkName(const char* name);
+	static void waterMark();
+	static bool vecCmpValueExistArr(DWORD val, vector<DWORD> vec);
+	static void vecSaveValuesArr(DWORD varLog, vector <DWORD>& varSave, bool optLogMsg = false);
+};
+
+
 class MemoryMgr {
 public:
-	LPVOID allocWriteEx(HANDLE hProcess, LPVOID pType, DWORD size);
-	DWORD returnPointer(const char* module, DWORD addBase, BYTE offset[], int size);
+	static void logValuesAddress(DWORD address);
+	static void memEdit(DWORD addr, const char arrBytes[], UINT size);
+	static LPVOID allocWriteEx(HANDLE hProcess, LPVOID pType, DWORD size);
+	static DWORD returnPointer(DWORD address, UINT offset[], int size);
+	static DWORD returnPointerMod(const char* mod, DWORD addBase, UINT offset[], int size);
+	static DWORD FindPatternModule(const char* module, const unsigned char pattern[], const char mask[]);
+	static DWORD FindPatternStartAddress(const unsigned char pattern[], const char mask[], DWORD startAddress, DWORD endAddress, UINT posScan = 1);
 };
 
 
@@ -73,6 +98,7 @@ public:
 class GameHacking
 {
 public:
+	Tools tools = Tools();
 	MemoryMgr memoryMgr = MemoryMgr();
 	PEHeader peHeader = PEHeader();
 	MethodInjection methodInjection = MethodInjection();

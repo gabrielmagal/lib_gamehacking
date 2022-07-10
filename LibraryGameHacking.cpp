@@ -7,45 +7,133 @@
 
 GameHacking gameHacking;
 
-#pragma region MemoryMgr
-LPVOID MemoryMgr::allocWriteEx(HANDLE hProcess, LPVOID pType, DWORD size) {
-	LPVOID Alloc = VirtualAllocEx(hProcess, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	if(Alloc) WriteProcessMemory(hProcess, Alloc, pType, size, 0);
-	return Alloc;
+#pragma region Tools
+MODULEINFO Tools::GetModuleInfo(const char* szModule) {
+	MODULEINFO modInfo = { 0 };
+	HMODULE hModule = GetModuleHandleA(szModule);
+	if (hModule != 0) GetModuleInformation(GetCurrentProcess(), hModule, &modInfo, sizeof(MODULEINFO));
+	return modInfo;
+}
+
+bool Tools::checkName(const char* name) {
+	char filename[MAX_PATH];
+	GetModuleFileNameA(0, filename, MAX_PATH);
+	std::string search = filename;
+	int found = search.find(name);
+	if (found > 0) return true;
+	return false;
 }
 
 
-DWORD MemoryMgr::returnPointer(const char* module, DWORD addBase, BYTE offset[], int size) {
-	MEMORY_BASIC_INFORMATION mbi;
-	DWORD base = 0;
-	HINSTANCE hModule = GetModuleHandleA(module);
-	if (hModule == 0) {
-		gameHacking.logMsg.consoleLog(false, "hModule: 0x%X", hModule);
-		return 0;
+void Tools::waterMark() {
+	setlocale(LC_ALL, "pt-br.UTF-8");
+	wprintf(L"╔══╗───╔═══╗╔═══╗─╔╗╔═══╗────╔══╗─╔╗─╔╗─────╔═╦═╗──────────────\n");
+	wprintf(L"║═╦╝╔╦╗║╔═╗║║╔═╗║╔╝║║╔═╗║╔═╦╗║╔╗║╔╝║─║╚╗╔══╗║║║║║╔═╗─╔═╗╔═╗─╔╗─\n");
+	wprintf(L"║╔╝─║╔╝╚╝╔╝║╚╝╔╝║║╬║║║║║║║║║║║╔╗║╚╗║─║╔╣╚══╝║║║║║║╬╚╗║╬║║╬╚╗║╚╗\n");
+	wprintf(L"╚╝──╚╝─╔╗╚╗║╔╗╚╗║╚═╝║║║║║╚╩═╝╚══╝─║║─╚═╝────╚╩═╩╝╚══╝╠╗║╚══╝╚═╝\n");
+	wprintf(L"───────║╚═╝║║╚═╝║───║╚═╝║────────╔╝╚╗────────────────╚═╝───────\n");
+	wprintf(L"───────╚═══╝╚═══╝───╚═══╝────────╝──╚──────────────────────────\n\n");
+}
+
+
+bool Tools::vecCmpValueExistArr(DWORD val, vector<DWORD> vec) {
+	for (int i = 1; i < vec.size(); i++) 
+		if (vec[i] == val) return true;
+	return false;
+}
+
+
+void Tools::vecSaveValuesArr(DWORD varLog, vector <DWORD>&varSave, bool optLogMsg) {
+	if (!vecCmpValueExistArr(varLog, varSave)) {
+		varSave.push_back(varLog);
+		if(optLogMsg)  printf_s("New Value: 0x%f\n", varLog);
 	}
-	VirtualQuery((LPCVOID)((DWORD)(hModule) + addBase), &mbi, sizeof(mbi));
-	if (hModule && mbi.State & MEM_COMMIT && !(mbi.Protect & PAGE_NOACCESS)) {
-		base = (*reinterpret_cast<DWORD*>(reinterpret_cast<DWORD>(hModule) + addBase));
-		if (base == 0) {
-			gameHacking.logMsg.consoleLog(false, "Failed to get memory base!");
-			return 0;
-		}
-		for (int i = 0; i < size; i++) {
-			VirtualQuery(reinterpret_cast<LPCVOID>(base + offset[i]), &mbi, sizeof(mbi));
-			if (hModule && mbi.State & MEM_COMMIT && !(mbi.Protect & PAGE_NOACCESS)) {
-				if (*reinterpret_cast<DWORD*>(base + offset[i]) != 0) base = (i == (size - 1)) ? base + offset[i] : *reinterpret_cast<DWORD*>(base + offset[i]);
-				else {
-					gameHacking.logMsg.consoleLog(false, "Failed to get next address by offset: 0x%X", offset[i]);
-					return 0;
-				}
-			}
-			else {
-				gameHacking.logMsg.consoleLog(false, "Failed to access memory!");
-				return 0;
-			}
-		}
+}
+
+#pragma endregion
+
+#pragma region MemoryMgr
+void MemoryMgr::logValuesAddress(DWORD address) {
+	vector<DWORD> valuesSaved;
+	while (TRUE) {
+		Tools::vecSaveValuesArr(*(DWORD*)(address), valuesSaved, true);
+		Sleep(10);
 	}
-	return base;
+}
+
+void MemoryMgr::memEdit(DWORD addr, const char arrBytes[], UINT size) {
+	DWORD oldProtect;
+	VirtualProtect((LPVOID)(addr), size, PAGE_EXECUTE_READWRITE, &oldProtect);
+	memcpy((void*)(addr), arrBytes, size);
+	VirtualProtect((LPVOID)(addr), size, oldProtect, &oldProtect);
+}
+
+
+LPVOID MemoryMgr::allocWriteEx(HANDLE hProcess, LPVOID pType, DWORD size) {
+	LPVOID alloc = VirtualAllocEx(hProcess, 0, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	WriteProcessMemory(hProcess, alloc, pType, size, 0);
+	return alloc;
+}
+
+
+
+DWORD MemoryMgr::returnPointer(DWORD address, UINT offset[], int size) {
+	DWORD base = *(DWORD*)(address);
+	if (base == 0) return 0;
+	for (int i = 0; i < size; i++) {
+		if (i == (size - 1)) return (DWORD)(base + offset[i]);
+		if (*(DWORD*)(base + offset[i]) != 0) base = *(DWORD*)(base + offset[i]);
+		else return 0;
+	}
+	return 0;
+}
+
+
+DWORD MemoryMgr::returnPointerMod(const char* mod, DWORD addBase, UINT offset[], int size) {
+	DWORD base = (*(DWORD*)((DWORD)(GetModuleHandleA(mod)) + addBase));
+	for (int i = 0; i < size; i++) {
+		if (i == (size - 1))  return (DWORD)(base + offset[i]);
+		if (*(DWORD*)(base + offset[i]) != 0) base = *(DWORD*)(base + offset[i]);
+		else return 0;
+	}
+	return 0;
+}
+
+
+DWORD MemoryMgr::FindPatternModule(const char* module, const unsigned char pattern[], const char mask[]) {
+	UINT found = 0;
+	MEMORY_BASIC_INFORMATION mbi = { 0 };
+	MODULEINFO mInfo = Tools::GetModuleInfo(module);
+	DWORD base = (DWORD)mInfo.lpBaseOfDll;
+	for (int i = 0; i < (DWORD)mInfo.SizeOfImage; i++)
+	{
+		if (mask[found] == '?' || *(BYTE*)(base + i) == pattern[found]) {
+			if (mask[found + 1] == '\0') {
+				return ((base + i) - (strlen(mask) - 1));
+			}
+			found++;
+		}
+		else found = 0;
+	}
+	return 0;
+}
+
+
+DWORD MemoryMgr::FindPatternStartAddress(const unsigned char pattern[], const char mask[], DWORD startAddress, DWORD endAddress, UINT posScan)  {
+	UINT addList = 0, found = 0;
+	for (int i = 0; i < (endAddress - startAddress); i++) {
+		if (mask[found] == '?' || *(BYTE*)(startAddress + i) == pattern[found]) {
+			if (mask[found + 1] == '\0') {
+				if (addList == (posScan - 1))
+					return (startAddress + i) - (strlen(mask) - 1);
+				addList++;
+				found = 0;
+			}
+			else found++;
+		}
+		else found = 0;
+	}
+	return 0;
 }
 
 #pragma endregion
